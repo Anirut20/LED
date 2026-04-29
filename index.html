@@ -179,8 +179,8 @@
             
             <!-- UI Hints (Hidden on very small mobile) -->
             <div class="pointer-events-auto bg-slate-800/50 p-2 md:p-3 rounded-lg border border-slate-700/50 text-[10px] md:text-xs text-slate-400 text-right hidden sm:block">
-                <p><i class="fa-solid fa-hand-pointer md:fa-mouse mr-1"></i> ลากนิ้ว/คลิกขยับเพื่อหมุน</p>
-                <p><i class="fa-solid fa-search mr-1 mt-1"></i> เลื่อนลูกกลิ้งเพื่อซูม</p>
+                <p><i class="fa-solid fa-hand-pointer md:fa-mouse mr-1"></i> ลาก 1 นิ้วเพื่อหมุน</p>
+                <p><i class="fa-solid fa-compress mr-1 mt-1"></i> ลาก 2 นิ้วเพื่อซูมเข้า/ออก</p>
             </div>
             
         </div>
@@ -232,8 +232,8 @@
         // --- 3. Create Simulation Objects ---
 
         // P-N Junction Visuals (ปรับสีให้สว่างขึ้นและเพิ่ม opacity เป็น 0.35)
-        const pTypeMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true, transparent: true, opacity: 0.8 }); // Red-500
-        const nTypeMaterial = new THREE.MeshBasicMaterial({ color: 0x3b82f6, wireframe: true, transparent: true, opacity: 0.8 }); // Blue-500
+        const pTypeMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true, transparent: true, opacity: 0.35 }); // Red-500
+        const nTypeMaterial = new THREE.MeshBasicMaterial({ color: 0x3b82f6, wireframe: true, transparent: true, opacity: 0.35 }); // Blue-500
         
         const blockGeo = new THREE.BoxGeometry(15, 10, 10);
         
@@ -258,7 +258,7 @@
         const sceneGlowMat = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.8,
+            opacity: 0,
             blending: THREE.AdditiveBlending,
             depthWrite: false
         });
@@ -521,10 +521,18 @@
             });
         }
 
-        // --- 5. Interaction Setup (Mouse & Touch) ---
+        // --- 5. Interaction Setup (Mouse, Touch & Pinch-to-Zoom) ---
 
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
+        let initialPinchDistance = null; // สำหรับเก็บระยะห่างของ 2 นิ้วเริ่มต้น
+
+        // Helper function คำนวณระยะห่างระหว่าง 2 จุด (สำหรับ 2 นิ้ว)
+        function getDistance(touch1, touch2) {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
 
         // Mouse Events
         container.addEventListener('mousedown', (e) => {
@@ -556,17 +564,23 @@
             isDragging = false;
         });
 
-        // Touch Events for Mobile Rotation
+        // Touch Events for Mobile Rotation and Pinch-to-Zoom
         container.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
+                // 1 นิ้ว สำหรับหมุน
                 isDragging = true;
+                initialPinchDistance = null;
                 previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.touches.length === 2) {
+                // 2 นิ้ว สำหรับซูม
+                isDragging = false; // ปิดการหมุนเมื่อใช้ 2 นิ้ว
+                initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
             }
         }, { passive: false });
 
         document.addEventListener('touchmove', (e) => {
-            if (isDragging && e.touches.length === 1) {
-                // คำนวณความต่างจากการลากนิ้ว
+            if (e.touches.length === 1 && isDragging) {
+                // 1 นิ้ว: หมุนโมเดล
                 const deltaMove = {
                     x: e.touches[0].clientX - previousMousePosition.x,
                     y: e.touches[0].clientY - previousMousePosition.y
@@ -582,11 +596,31 @@
 
                 scene.quaternion.multiplyQuaternions(deltaRotationQuaternion, scene.quaternion);
                 previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                
+            } else if (e.touches.length === 2 && initialPinchDistance !== null) {
+                // 2 นิ้ว: ซูมเข้า-ออก (Pinch-to-zoom)
+                const currentDistance = getDistance(e.touches[0], e.touches[1]);
+                
+                // ถ้าระยะห่างลดลง (หุบนิ้ว) ค่าจะเป็นบวก (ซูมออก/ถอยกล้อง)
+                // ถ้าระยะห่างเพิ่มขึ้น (ถ่างนิ้ว) ค่าจะเป็นลบ (ซูมเข้า/เดินกล้องหน้า)
+                const distanceDelta = initialPinchDistance - currentDistance;
+
+                // อัปเดตตำแหน่งกล้องแกน Z
+                camera.position.z += distanceDelta * 0.05; // 0.05 คือความเร็วในการซูม
+                camera.position.z = Math.max(10, Math.min(camera.position.z, 50)); // Clamp ไม่ให้ซูมลึกหรือไกลเกินไป
+
+                // รีเซ็ตค่าระยะห่างเพื่อการซูมแบบต่อเนื่อง
+                initialPinchDistance = currentDistance;
             }
         }, { passive: false });
 
-        document.addEventListener('touchend', () => {
-            isDragging = false;
+        document.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                initialPinchDistance = null;
+            }
+            if (e.touches.length === 0) {
+                isDragging = false;
+            }
         });
 
         // Wheel to zoom (Desktop)
