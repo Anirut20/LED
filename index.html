@@ -78,6 +78,11 @@
         #led-bulb-container {
             transition: all 0.3s ease;
         }
+
+        /* Panel dragging utility */
+        .grabbing {
+            cursor: grabbing !important;
+        }
     </style>
 </head>
 <body>
@@ -112,59 +117,85 @@
             </div>
         </div>
 
-        <!-- Bottom Left: Controls -->
-        <!-- Responsive width & max-height adjustments to leave room for FAB on mobile -->
-        <div class="pointer-events-auto absolute bottom-4 left-4 md:bottom-6 md:left-6 bg-slate-800/80 backdrop-blur-md p-4 md:p-6 rounded-2xl border border-slate-700 shadow-2xl w-[calc(100%-5rem)] md:w-96 flex flex-col gap-3 md:gap-4 max-h-[45vh] md:max-h-[70vh] overflow-y-auto z-10">
-            <header>
-                <h1 class="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
-                    <i class="fa-solid fa-microchip mr-2 text-blue-400"></i>การเกิดแสง LED
-                </h1>
-                <p class="text-slate-400 text-xs md:text-sm mt-1">โปรแกรมจำลองระดับจุลภาค</p>
+        <!-- Draggable & Collapsible Control Panel -->
+        <div id="control-panel" class="pointer-events-auto absolute bottom-4 left-4 md:bottom-6 md:left-6 bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700 shadow-2xl w-[calc(100%-5rem)] md:w-96 flex flex-col z-20 transition-all duration-300">
+            
+            <!-- Draggable Header -->
+            <header id="panel-header" class="flex justify-between items-center p-4 md:p-5 cursor-grab touch-none border-b border-transparent rounded-t-2xl">
+                <div class="pointer-events-none select-none">
+                    <h1 class="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                        <i class="fa-solid fa-microchip mr-2 text-blue-400"></i>การเกิดแสง LED
+                    </h1>
+                    <p class="text-slate-400 text-[10px] md:text-xs mt-1">กดลากเพื่อย้ายหน้าต่าง</p>
+                </div>
+                <button id="toggle-panel-btn" class="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-700/50 transition-colors focus:outline-none" title="ย่อ/ขยายหน้าต่าง">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
             </header>
 
-            <!-- Main Power Switch -->
-            <div class="bg-slate-900/50 p-3 md:p-4 rounded-xl border border-slate-700/50 flex items-center justify-between">
-                <div>
-                    <h3 class="font-semibold text-slate-200 text-sm md:text-base">สถานะการทำงาน</h3>
-                    <p id="power-status-text" class="text-[10px] md:text-xs text-red-400 mt-1">ปิดระบบ (No Voltage)</p>
-                </div>
-                <button id="power-btn" class="relative inline-flex h-7 w-12 md:h-8 md:w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 bg-slate-600" role="switch" aria-checked="false">
-                    <span id="power-knob" class="inline-block h-5 w-5 md:h-6 md:w-6 transform rounded-full bg-white transition-transform translate-x-1"></span>
-                </button>
-            </div>
-
-            <!-- Controls (Disabled when off) -->
-            <div id="controls-container" class="opacity-50 transition-opacity duration-300 pointer-events-none flex flex-col gap-3 md:gap-5">
-                <!-- Voltage Control -->
-                <div>
-                    <div class="flex justify-between mb-1">
-                        <label class="text-xs md:text-sm font-medium text-slate-300">แรงดันไฟฟ้า (Voltage)</label>
-                        <span id="voltage-val" class="text-xs md:text-sm font-mono text-blue-300">0.0 V</span>
+            <!-- Panel Body -->
+            <div id="panel-body" class="px-4 pb-4 md:px-5 md:pb-5 flex flex-col gap-3 md:gap-4 max-h-[40vh] md:max-h-[60vh] overflow-y-auto">
+                <!-- Main Power Switch -->
+                <div class="bg-slate-900/50 p-3 md:p-4 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                    <div>
+                        <h3 class="font-semibold text-slate-200 text-sm md:text-base">สถานะการทำงาน</h3>
+                        <p id="power-status-text" class="text-[10px] md:text-xs text-red-400 mt-1">ปิดระบบ (No Voltage)</p>
                     </div>
-                    <input type="range" id="voltage-slider" min="0" max="100" value="0" class="w-full">
-                    <p class="text-[9px] md:text-[10px] text-slate-500 mt-1 text-right">กระตุ้นอิเล็กตรอนให้เคลื่อนที่</p>
+                    <button id="power-btn" class="relative inline-flex h-7 w-12 md:h-8 md:w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 bg-slate-600" role="switch" aria-checked="false">
+                        <span id="power-knob" class="inline-block h-5 w-5 md:h-6 md:w-6 transform rounded-full bg-white transition-transform translate-x-1"></span>
+                    </button>
                 </div>
 
-                <!-- Bandgap Control -->
-                <div>
-                    <div class="flex justify-between mb-1">
-                        <label class="text-xs md:text-sm font-medium text-slate-300">ช่องว่างพลังงาน (Bandgap)</label>
-                        <span id="bandgap-val" class="text-xs md:text-sm font-mono text-emerald-300">ปานกลาง</span>
+                <!-- Controls (Disabled when off) -->
+                <div id="controls-container" class="opacity-50 transition-opacity duration-300 pointer-events-none flex flex-col gap-3 md:gap-5">
+                    <!-- Voltage Control -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs md:text-sm font-medium text-slate-300">แรงดันไฟฟ้า (Voltage)</label>
+                            <span id="voltage-val" class="text-xs md:text-sm font-mono text-blue-300">0.0 V</span>
+                        </div>
+                        <input type="range" id="voltage-slider" min="0" max="100" value="0" class="w-full">
+                        <p class="text-[9px] md:text-[10px] text-slate-500 mt-1 text-right">กระตุ้นอิเล็กตรอนให้เคลื่อนที่</p>
                     </div>
-                    <!-- 0 = Red (Narrow), 50 = Green/Yellow (Medium), 100 = Blue (Wide) -->
-                    <input type="range" id="bandgap-slider" min="0" max="100" value="50" class="w-full">
-                    <div class="flex justify-between text-[9px] md:text-[10px] text-slate-500 mt-1">
-                        <span>แคบ (พลังงานต่ำ)</span>
-                        <span>กว้าง (พลังงานสูง)</span>
+
+                    <!-- Bandgap Control -->
+                    <div>
+                        <div class="flex justify-between items-start mb-1">
+                            <div class="flex flex-col">
+                                <label class="text-xs md:text-sm font-medium text-slate-300">ช่องว่างพลังงาน (Bandgap)</label>
+                                <!-- Auto Toggle -->
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-[10px] text-slate-400">Auto</span>
+                                    <button id="auto-bandgap-btn" class="relative inline-flex h-4 w-8 items-center rounded-full transition-colors focus:outline-none bg-slate-600" title="ปรับออโต้">
+                                        <span id="auto-bandgap-knob" class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform translate-x-1"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <span id="bandgap-val" class="text-xs md:text-sm font-mono text-emerald-300">ปานกลาง</span>
+                        </div>
+                        <!-- 0 = Red (Narrow), 50 = Green/Yellow (Medium), 100 = Blue (Wide) -->
+                        <input type="range" id="bandgap-slider" min="0" max="100" value="50" class="w-full transition-opacity mt-1">
+                        <div class="flex justify-between text-[9px] md:text-[10px] text-slate-500 mt-1">
+                            <span>แคบ (พลังงานต่ำ)</span>
+                            <span>กว้าง (พลังงานสูง)</span>
+                        </div>
+                        
+                        <!-- Auto Speed Slider -->
+                        <div id="auto-speed-container" class="mt-2 hidden bg-slate-800/50 p-2 rounded-lg border border-slate-700/50 transition-all">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-[10px] text-slate-300"><i class="fa-solid fa-bolt text-yellow-400 mr-1"></i> ความเร็ว Auto</span>
+                            </div>
+                            <input type="range" id="auto-speed-slider" min="5" max="100" value="20" class="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer">
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Explanation Panel -->
-            <div class="bg-slate-900/50 p-3 md:p-4 rounded-xl border border-slate-700/50 flex-1">
-                <h3 class="text-xs md:text-sm font-semibold text-slate-300 mb-2 border-b border-slate-700 pb-1">กระบวนการที่เกิดขึ้น</h3>
-                <div id="explanation-text" class="text-xs md:text-sm text-slate-400 leading-relaxed h-20 md:h-24 overflow-y-auto pr-2">
-                    รอการเปิดระบบ...
+                <!-- Explanation Panel -->
+                <div class="bg-slate-900/50 p-3 md:p-4 rounded-xl border border-slate-700/50 flex-shrink-0">
+                    <h3 class="text-xs md:text-sm font-semibold text-slate-300 mb-2 border-b border-slate-700 pb-1">กระบวนการที่เกิดขึ้น</h3>
+                    <div id="explanation-text" class="text-xs md:text-sm text-slate-400 leading-relaxed h-20 md:h-24 overflow-y-auto pr-2">
+                        รอการเปิดระบบ...
+                    </div>
                 </div>
             </div>
         </div>
@@ -194,6 +225,11 @@
         let bandgap = 50; // 0 to 100 (0=Red, 50=Green, 100=Blue)
         let currentColor = new THREE.Color(0x00ff00); // Default middle
         let baseBgColor = new THREE.Color(0x0f172a); // Slate 900 background
+        
+        // Auto Bandgap State
+        let isAutoBandgap = false;
+        let autoBandgapSpeed = 20; // units per second
+        let bandgapDirection = 1; // 1 = going up, -1 = going down
 
         const powerBtn = document.getElementById('power-btn');
         const powerKnob = document.getElementById('power-knob');
@@ -206,11 +242,110 @@
         const bandgapSlider = document.getElementById('bandgap-slider');
         const bandgapVal = document.getElementById('bandgap-val');
 
+        // Auto Bandgap Elements
+        const autoBandgapBtn = document.getElementById('auto-bandgap-btn');
+        const autoBandgapKnob = document.getElementById('auto-bandgap-knob');
+        const autoSpeedContainer = document.getElementById('auto-speed-container');
+        const autoSpeedSlider = document.getElementById('auto-speed-slider');
+
         const explanationText = document.getElementById('explanation-text');
         const ledGlow = document.getElementById('led-glow');
         const ledStatusText = document.getElementById('led-status-text');
         const spectrumIndicator = document.getElementById('spectrum-indicator');
         const resetCamBtn = document.getElementById('reset-cam-btn');
+
+        // --- Panel Drag & Collapse Logic ---
+        const controlPanel = document.getElementById('control-panel');
+        const panelHeader = document.getElementById('panel-header');
+        const togglePanelBtn = document.getElementById('toggle-panel-btn');
+        const panelBody = document.getElementById('panel-body');
+        const toggleIcon = togglePanelBtn.querySelector('i');
+
+        let isPanelCollapsed = false;
+
+        // Toggle Collapse/Expand
+        togglePanelBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // ป้องกันไม่ให้ trigger การลาก
+            isPanelCollapsed = !isPanelCollapsed;
+            if (isPanelCollapsed) {
+                panelBody.style.display = 'none';
+                toggleIcon.classList.remove('fa-chevron-down');
+                toggleIcon.classList.add('fa-chevron-up');
+                panelHeader.classList.remove('border-transparent');
+                panelHeader.classList.add('border-slate-700/50');
+            } else {
+                panelBody.style.display = 'flex';
+                toggleIcon.classList.remove('fa-chevron-up');
+                toggleIcon.classList.add('fa-chevron-down');
+                panelHeader.classList.add('border-transparent');
+                panelHeader.classList.remove('border-slate-700/50');
+            }
+        });
+
+        // Dragging Logic
+        let isDraggingPanel = false;
+        let panelOffsetX = 0;
+        let panelOffsetY = 0;
+
+        panelHeader.addEventListener('mousedown', startDragPanel);
+        panelHeader.addEventListener('touchstart', (e) => startDragPanel(e.touches[0]), { passive: false });
+
+        function startDragPanel(e) {
+            if (e.target.closest('button')) return; // ไม่ลากถ้ากำลังกดปุ่มพับ
+            
+            isDraggingPanel = true;
+            panelHeader.classList.add('grabbing');
+            
+            // ปิด Transition ชั่วคราวเพื่อให้ลากได้ลื่นไหล
+            controlPanel.style.transition = 'none';
+            
+            const rect = controlPanel.getBoundingClientRect();
+            panelOffsetX = e.clientX - rect.left;
+            panelOffsetY = e.clientY - rect.top;
+            
+            // ยกเลิกข้อจำกัดของ Tailwind (bottom, right)
+            controlPanel.style.bottom = 'auto';
+            controlPanel.style.right = 'auto';
+            
+            // ล็อกความกว้างไว้ป้องกันขนาดเปลี่ยนเมื่อลากหลุดออกจากตำแหน่งเดิม
+            if (!controlPanel.style.width) {
+                controlPanel.style.width = rect.width + 'px';
+            }
+        }
+
+        document.addEventListener('mousemove', dragPanel);
+        document.addEventListener('touchmove', (e) => {
+            if (isDraggingPanel) {
+                dragPanel(e.touches[0]);
+                if (e.cancelable) e.preventDefault(); // ป้องกันการเลื่อนจอขณะลาก
+            }
+        }, { passive: false });
+
+        function dragPanel(e) {
+            if (!isDraggingPanel) return;
+            
+            let newX = e.clientX - panelOffsetX;
+            let newY = e.clientY - panelOffsetY;
+            
+            // ป้องกันลากหลุดออกจากขอบจอ
+            newX = Math.max(0, Math.min(newX, window.innerWidth - 80));
+            newY = Math.max(0, Math.min(newY, window.innerHeight - 50));
+            
+            controlPanel.style.left = newX + 'px';
+            controlPanel.style.top = newY + 'px';
+        }
+
+        document.addEventListener('mouseup', stopDragPanel);
+        document.addEventListener('touchend', stopDragPanel);
+
+        function stopDragPanel() {
+            if (isDraggingPanel) {
+                isDraggingPanel = false;
+                panelHeader.classList.remove('grabbing');
+                // เปิด Transition กลับมาอีกครั้ง
+                controlPanel.style.transition = 'all 0.3s ease';
+            }
+        }
 
         // --- 2. Setup Three.js Scene ---
         const container = document.getElementById('canvas-container');
@@ -521,10 +656,10 @@
             });
         }
 
-        // --- 5. Interaction Setup (Mouse, Touch & Pinch-to-Zoom) ---
+        // --- 5. Interaction Setup (Mouse, Touch & Pinch-to-Zoom for 3D Camera) ---
 
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
+        let isDragging3D = false;
+        let previousMousePosition3D = { x: 0, y: 0 };
         let initialPinchDistance = null; // สำหรับเก็บระยะห่างของ 2 นิ้วเริ่มต้น
 
         // Helper function คำนวณระยะห่างระหว่าง 2 จุด (สำหรับ 2 นิ้ว)
@@ -534,17 +669,17 @@
             return Math.sqrt(dx * dx + dy * dy);
         }
 
-        // Mouse Events
+        // Mouse Events for 3D
         container.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
+            isDragging3D = true;
+            previousMousePosition3D = { x: e.clientX, y: e.clientY };
         });
 
         document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
+            if (isDragging3D) {
                 const deltaMove = {
-                    x: e.clientX - previousMousePosition.x,
-                    y: e.clientY - previousMousePosition.y
+                    x: e.clientX - previousMousePosition3D.x,
+                    y: e.clientY - previousMousePosition3D.y
                 };
 
                 const deltaRotationQuaternion = new THREE.Quaternion()
@@ -556,34 +691,34 @@
                     ));
 
                 scene.quaternion.multiplyQuaternions(deltaRotationQuaternion, scene.quaternion);
-                previousMousePosition = { x: e.clientX, y: e.clientY };
+                previousMousePosition3D = { x: e.clientX, y: e.clientY };
             }
         });
 
         document.addEventListener('mouseup', () => {
-            isDragging = false;
+            isDragging3D = false;
         });
 
-        // Touch Events for Mobile Rotation and Pinch-to-Zoom
+        // Touch Events for Mobile Rotation and Pinch-to-Zoom (3D)
         container.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 // 1 นิ้ว สำหรับหมุน
-                isDragging = true;
+                isDragging3D = true;
                 initialPinchDistance = null;
-                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                previousMousePosition3D = { x: e.touches[0].clientX, y: e.touches[0].clientY };
             } else if (e.touches.length === 2) {
                 // 2 นิ้ว สำหรับซูม
-                isDragging = false; // ปิดการหมุนเมื่อใช้ 2 นิ้ว
+                isDragging3D = false; // ปิดการหมุนเมื่อใช้ 2 นิ้ว
                 initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
             }
         }, { passive: false });
 
         document.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1 && isDragging) {
+            if (e.touches.length === 1 && isDragging3D) {
                 // 1 นิ้ว: หมุนโมเดล
                 const deltaMove = {
-                    x: e.touches[0].clientX - previousMousePosition.x,
-                    y: e.touches[0].clientY - previousMousePosition.y
+                    x: e.touches[0].clientX - previousMousePosition3D.x,
+                    y: e.touches[0].clientY - previousMousePosition3D.y
                 };
 
                 const deltaRotationQuaternion = new THREE.Quaternion()
@@ -595,7 +730,7 @@
                     ));
 
                 scene.quaternion.multiplyQuaternions(deltaRotationQuaternion, scene.quaternion);
-                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                previousMousePosition3D = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                 
             } else if (e.touches.length === 2 && initialPinchDistance !== null) {
                 // 2 นิ้ว: ซูมเข้า-ออก (Pinch-to-zoom)
@@ -619,7 +754,7 @@
                 initialPinchDistance = null;
             }
             if (e.touches.length === 0) {
-                isDragging = false;
+                isDragging3D = false;
             }
         });
 
@@ -643,11 +778,7 @@
             isPowerOn = !isPowerOn;
             
             if (isPowerOn) {
-                // กรณีปุ่ม power เปิด (ใช้ Tailwind ช่วยจัดการคลาส)
-                let mdClassPrefix = 'md:w-14';
-                let mdKnobPrefix = 'md:translate-x-7';
-                let smKnobPrefix = 'translate-x-6';
-                
+                // กรณีปุ่ม power เปิด
                 powerBtn.classList.remove('bg-slate-600');
                 powerBtn.classList.add('bg-emerald-500');
                 powerKnob.classList.remove('translate-x-1');
@@ -690,13 +821,36 @@
         });
 
         voltageSlider.addEventListener('input', (e) => {
-            voltage = parseInt(e.target.value);
+            voltage = parseFloat(e.target.value);
             updateUIValues();
         });
 
         bandgapSlider.addEventListener('input', (e) => {
-            bandgap = parseInt(e.target.value);
+            bandgap = parseFloat(e.target.value);
             updateUIValues();
+        });
+
+        // --- Auto Bandgap UI Listeners ---
+        autoBandgapBtn.addEventListener('click', () => {
+            isAutoBandgap = !isAutoBandgap;
+            
+            if (isAutoBandgap) {
+                // เปิดโหมด Auto
+                autoBandgapBtn.classList.replace('bg-slate-600', 'bg-blue-500');
+                autoBandgapKnob.classList.replace('translate-x-1', 'translate-x-4');
+                autoSpeedContainer.classList.remove('hidden');
+                bandgapSlider.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                // ปิดโหมด Auto
+                autoBandgapBtn.classList.replace('bg-blue-500', 'bg-slate-600');
+                autoBandgapKnob.classList.replace('translate-x-4', 'translate-x-1');
+                autoSpeedContainer.classList.add('hidden');
+                bandgapSlider.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        });
+
+        autoSpeedSlider.addEventListener('input', (e) => {
+            autoBandgapSpeed = parseFloat(e.target.value);
         });
 
         function updateUIValues() {
@@ -822,8 +976,25 @@
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
             
+            // Auto Bandgap Animation Logic
+            if (isAutoBandgap && isPowerOn) {
+                bandgap += autoBandgapSpeed * bandgapDirection * delta;
+                
+                // เช็คการเด้งชนขอบสุดทาง (ping-pong effect)
+                if (bandgap >= 100) {
+                    bandgap = 100;
+                    bandgapDirection = -1; // เปลี่ยนทิศให้ลดลง
+                } else if (bandgap <= 0) {
+                    bandgap = 0;
+                    bandgapDirection = 1; // เปลี่ยนทิศให้เพิ่มขึ้น
+                }
+                
+                // อัปเดตสไลเดอร์ให้วิ่งตามค่าที่เปลี่ยนแปลง
+                bandgapSlider.value = bandgap;
+                updateUIValues();
+            }
+
             updateSimulation(delta);
-            
             renderer.render(scene, camera);
         }
 
