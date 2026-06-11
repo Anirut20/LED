@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -34,6 +35,966 @@
             pointer-events: none; /* Let clicks pass through to canvas */
             display: flex;
             flex-direction: column;
+        }
+        .pointer-events-auto {
+            pointer-events: auto;
+        }
+        
+        /* Custom range slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #475569;
+            border-radius: 2px;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse-text {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        #led-bulb-container {
+            transition: all 0.3s ease;
+        }
+
+        /* Panel dragging utility */
+        .grabbing {
+            cursor: grabbing !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Layer -->
+    <div id="ui-layer" class="relative w-full h-full pointer-events-none">
+        
+        <!-- Top Left: LED Bulb -->
+        <div class="pointer-events-auto absolute top-4 left-4 md:top-6 md:left-6 bg-slate-800/80 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-slate-700 shadow-xl flex items-center gap-3 transition-all z-10 origin-top-left scale-90 md:scale-100">
+            <div class="relative w-10 h-10 md:w-14 md:h-14 flex items-center justify-center">
+                <i class="fa-solid fa-lightbulb text-3xl md:text-4xl text-slate-600 absolute z-0" id="led-base-icon"></i>
+                <div id="led-glow" class="absolute w-10 h-10 md:w-12 md:h-12 rounded-full blur-xl opacity-0 transition-all duration-300 z-10"></div>
+            </div>
+            <div>
+                <h3 class="text-xs md:text-sm font-bold text-slate-200">ผลลัพธ์หลอดไฟ</h3>
+                <p id="led-status-text" class="text-[10px] md:text-xs text-slate-400">ปิดระบบ</p>
+            </div>
+        </div>
+
+        <!-- Top Right: Spectrum Bar -->
+        <div class="pointer-events-auto absolute top-4 right-4 md:top-6 md:right-6 bg-slate-800/80 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center z-10 origin-top-right scale-90 md:scale-100">
+            <h3 class="text-[10px] md:text-xs font-semibold text-slate-400 mb-2">สเปกตรัมแสง (Light Spectrum)</h3>
+            <div class="relative w-32 md:w-64 h-4 md:h-5 rounded-md overflow-hidden" style="background: linear-gradient(to right, hsl(0, 100%, 50%), hsl(60, 100%, 50%), hsl(120, 100%, 50%), hsl(180, 100%, 50%), hsl(240, 100%, 50%));">
+                <div id="spectrum-indicator" class="absolute top-0 w-1.5 h-full bg-white border border-slate-800 transition-all duration-100" style="left: 50%; transform: translateX(-50%); box-shadow: 0 0 5px rgba(255,255,255,0.8);"></div>
+            </div>
+            <div class="w-full flex justify-between text-[9px] md:text-[10px] text-slate-400 mt-1 font-mono">
+                <span>พลังงานต่ำ (แดง)</span>
+                <span>พลังงานสูง (น้ำเงิน)</span>
+            </div>
+        </div>
+
+        <!-- Draggable & Collapsible Control Panel -->
+        <div id="control-panel" class="pointer-events-auto absolute bottom-4 left-4 md:bottom-6 md:left-6 bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700 shadow-2xl w-[calc(100%-5rem)] md:w-96 flex flex-col z-20 transition-all duration-300">
+            
+            <!-- Draggable Header -->
+            <header id="panel-header" class="flex justify-between items-center p-4 md:p-5 cursor-grab touch-none border-b border-transparent rounded-t-2xl">
+                <div class="pointer-events-none select-none">
+                    <h1 class="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                        <i class="fa-solid fa-microchip mr-2 text-blue-400"></i>การเกิดแสง LED
+                    </h1>
+                    <p class="text-slate-400 text-[10px] md:text-xs mt-1">กดลากเพื่อย้ายหน้าต่าง</p>
+                </div>
+                <button id="toggle-panel-btn" class="text-slate-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-700/50 transition-colors focus:outline-none" title="ย่อ/ขยายหน้าต่าง">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </header>
+
+            <!-- Panel Body -->
+            <div id="panel-body" class="px-4 pb-4 md:px-5 md:pb-5 flex flex-col gap-3 md:gap-4 max-h-[45vh] md:max-h-[60vh] overflow-y-auto">
+                <!-- Main Power Switch -->
+                <div class="bg-slate-900/50 p-3 md:p-4 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                    <div>
+                        <h3 class="font-semibold text-slate-200 text-sm md:text-base">สถานะการทำงาน</h3>
+                        <p id="power-status-text" class="text-[10px] md:text-xs text-red-400 mt-1">ปิดระบบ (No Voltage)</p>
+                    </div>
+                    <button id="power-btn" class="relative inline-flex h-7 w-12 md:h-8 md:w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 bg-slate-600" role="switch" aria-checked="false">
+                        <span id="power-knob" class="inline-block h-5 w-5 md:h-6 md:w-6 transform rounded-full bg-white transition-transform translate-x-1"></span>
+                    </button>
+                </div>
+
+                <!-- Controls (Disabled when off) -->
+                <div id="controls-container" class="opacity-50 transition-opacity duration-300 pointer-events-none flex flex-col gap-3 md:gap-5">
+                    <!-- Voltage Control -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs md:text-sm font-medium text-slate-300">แรงดันไฟฟ้า (Voltage)</label>
+                            <span id="voltage-val" class="text-xs md:text-sm font-mono text-blue-300">0.0 V</span>
+                        </div>
+                        <input type="range" id="voltage-slider" min="0" max="100" value="0" class="w-full">
+                        <div class="flex justify-between text-[9px] md:text-[10px] text-slate-500 mt-1">
+                            <span>0 V</span>
+                            <span>ผลักอนุภาค</span>
+                            <span>5.0 V</span>
+                        </div>
+                    </div>
+
+                    <!-- Bandgap Control -->
+                    <div>
+                        <div class="flex justify-between items-start mb-1">
+                            <div class="flex flex-col">
+                                <label class="text-xs md:text-sm font-medium text-slate-300">ช่องว่างพลังงาน (Bandgap)</label>
+                                <!-- Auto Toggle -->
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-[10px] text-slate-400">Auto</span>
+                                    <button id="auto-bandgap-btn" class="relative inline-flex h-4 w-8 items-center rounded-full transition-colors focus:outline-none bg-slate-600" title="ปรับออโต้">
+                                        <span id="auto-bandgap-knob" class="inline-block h-3 w-3 transform rounded-full bg-white transition-transform translate-x-1"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <span id="bandgap-val" class="text-xs md:text-sm font-mono text-emerald-300">ปานกลาง</span>
+                        </div>
+                        <!-- 0 = Red (Narrow), 50 = Green/Yellow (Medium), 100 = Blue (Wide) -->
+                        <input type="range" id="bandgap-slider" min="0" max="100" value="50" class="w-full transition-opacity mt-1">
+                        <div class="flex justify-between text-[9px] md:text-[10px] text-slate-500 mt-1">
+                            <span>แคบ (พลังงานต่ำ)</span>
+                            <span>กว้าง (พลังงานสูง)</span>
+                        </div>
+                        
+                        <!-- Auto Speed Slider -->
+                        <div id="auto-speed-container" class="mt-2 hidden bg-slate-800/50 p-2 rounded-lg border border-slate-700/50 transition-all">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-[10px] text-slate-300"><i class="fa-solid fa-bolt text-yellow-400 mr-1"></i> ความเร็ว Auto</span>
+                            </div>
+                            <input type="range" id="auto-speed-slider" min="5" max="100" value="20" class="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Explanation Panel -->
+                <div class="bg-slate-900/50 p-3 md:p-4 rounded-xl border border-slate-700/50 flex-shrink-0">
+                    <h3 class="text-xs md:text-sm font-semibold text-slate-300 mb-2 border-b border-slate-700 pb-1">กระบวนการที่เกิดขึ้น</h3>
+                    <div id="explanation-text" class="text-xs md:text-sm text-slate-400 leading-relaxed h-44 md:h-48 overflow-y-auto pr-2">
+                        รอการเปิดระบบ...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Right: Action Buttons & UI Hints -->
+        <div class="absolute bottom-4 right-4 md:bottom-6 md:right-6 flex flex-col items-end gap-2 z-10 pointer-events-none">
+            
+            <!-- Reset Camera Button -->
+            <button id="reset-cam-btn" class="pointer-events-auto bg-slate-800/90 hover:bg-slate-700 text-slate-200 w-12 h-12 flex items-center justify-center rounded-full border border-slate-600 shadow-xl backdrop-blur-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-500" title="ตั้งกล้องกลับจุดศูนย์กลาง">
+                <i class="fa-solid fa-crosshairs text-xl text-blue-400"></i>
+            </button>
+            
+            <!-- UI Hints (Hidden on very small mobile) -->
+            <div class="pointer-events-auto bg-slate-800/50 p-2 md:p-3 rounded-lg border border-slate-700/50 text-[10px] md:text-xs text-slate-400 text-right hidden sm:block">
+                <p><i class="fa-solid fa-hand-pointer md:fa-mouse mr-1"></i> ลาก 1 นิ้วเพื่อหมุน</p>
+                <p><i class="fa-solid fa-compress mr-1 mt-1"></i> ลาก 2 นิ้วเพื่อซูมเข้า/ออก</p>
+            </div>
+            
+        </div>
+
+    </div>
+
+    <script>
+        // --- 1. UI Elements & State ---
+        let isPowerOn = false;
+        let voltageSliderValue = 0; // 0 to 100
+        let actualVoltage = 0.0; // 0.0 to 5.0V
+        let bandgap = 50; // 0 to 100 (0=Red, 50=Green, 100=Blue)
+        let cutInVoltage = 2.2; // Required voltage to turn on
+        let isConducting = false; // Is power on AND voltage >= cutInVoltage?
+        
+        let currentColor = new THREE.Color(0x00ff00); // Default middle
+        let baseBgColor = new THREE.Color(0x0f172a); // Slate 900 background
+        
+        // Auto Bandgap State
+        let isAutoBandgap = false;
+        let autoBandgapSpeed = 20; // units per second
+        let bandgapDirection = 1; // 1 = going up, -1 = going down
+
+        const powerBtn = document.getElementById('power-btn');
+        const powerKnob = document.getElementById('power-knob');
+        const powerStatusText = document.getElementById('power-status-text');
+        const controlsContainer = document.getElementById('controls-container');
+        
+        const voltageSlider = document.getElementById('voltage-slider');
+        const voltageVal = document.getElementById('voltage-val');
+        
+        const bandgapSlider = document.getElementById('bandgap-slider');
+        const bandgapVal = document.getElementById('bandgap-val');
+
+        // Auto Bandgap Elements
+        const autoBandgapBtn = document.getElementById('auto-bandgap-btn');
+        const autoBandgapKnob = document.getElementById('auto-bandgap-knob');
+        const autoSpeedContainer = document.getElementById('auto-speed-container');
+        const autoSpeedSlider = document.getElementById('auto-speed-slider');
+
+        const explanationText = document.getElementById('explanation-text');
+        const ledGlow = document.getElementById('led-glow');
+        const ledStatusText = document.getElementById('led-status-text');
+        const spectrumIndicator = document.getElementById('spectrum-indicator');
+        const resetCamBtn = document.getElementById('reset-cam-btn');
+
+        // --- Panel Drag & Collapse Logic ---
+        const controlPanel = document.getElementById('control-panel');
+        const panelHeader = document.getElementById('panel-header');
+        const togglePanelBtn = document.getElementById('toggle-panel-btn');
+        const panelBody = document.getElementById('panel-body');
+        const toggleIcon = togglePanelBtn.querySelector('i');
+
+        let isPanelCollapsed = false;
+
+        // Toggle Collapse/Expand
+        togglePanelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isPanelCollapsed = !isPanelCollapsed;
+            if (isPanelCollapsed) {
+                panelBody.style.display = 'none';
+                toggleIcon.classList.remove('fa-chevron-down');
+                toggleIcon.classList.add('fa-chevron-up');
+                panelHeader.classList.remove('border-transparent');
+                panelHeader.classList.add('border-slate-700/50');
+            } else {
+                panelBody.style.display = 'flex';
+                toggleIcon.classList.remove('fa-chevron-up');
+                toggleIcon.classList.add('fa-chevron-down');
+                panelHeader.classList.add('border-transparent');
+                panelHeader.classList.remove('border-slate-700/50');
+            }
+        });
+
+        // Dragging Logic
+        let isDraggingPanel = false;
+        let panelOffsetX = 0;
+        let panelOffsetY = 0;
+
+        panelHeader.addEventListener('mousedown', startDragPanel);
+        panelHeader.addEventListener('touchstart', (e) => startDragPanel(e.touches[0]), { passive: false });
+
+        function startDragPanel(e) {
+            if (e.target.closest('button')) return;
+            
+            isDraggingPanel = true;
+            panelHeader.classList.add('grabbing');
+            
+            controlPanel.style.transition = 'none';
+            
+            const rect = controlPanel.getBoundingClientRect();
+            panelOffsetX = e.clientX - rect.left;
+            panelOffsetY = e.clientY - rect.top;
+            
+            controlPanel.style.bottom = 'auto';
+            controlPanel.style.right = 'auto';
+            
+            if (!controlPanel.style.width) {
+                controlPanel.style.width = rect.width + 'px';
+            }
+        }
+
+        document.addEventListener('mousemove', dragPanel);
+        document.addEventListener('touchmove', (e) => {
+            if (isDraggingPanel) {
+                dragPanel(e.touches[0]);
+                if (e.cancelable) e.preventDefault();
+            }
+        }, { passive: false });
+
+        function dragPanel(e) {
+            if (!isDraggingPanel) return;
+            
+            let newX = e.clientX - panelOffsetX;
+            let newY = e.clientY - panelOffsetY;
+            
+            newX = Math.max(0, Math.min(newX, window.innerWidth - 80));
+            newY = Math.max(0, Math.min(newY, window.innerHeight - 50));
+            
+            controlPanel.style.left = newX + 'px';
+            controlPanel.style.top = newY + 'px';
+        }
+
+        document.addEventListener('mouseup', stopDragPanel);
+        document.addEventListener('touchend', stopDragPanel);
+
+        function stopDragPanel() {
+            if (isDraggingPanel) {
+                isDraggingPanel = false;
+                panelHeader.classList.remove('grabbing');
+                controlPanel.style.transition = 'all 0.3s ease';
+            }
+        }
+
+        // --- 2. Setup Three.js Scene ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = baseBgColor.clone();
+        
+        scene.fog = new THREE.FogExp2(0x0f172a, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 25);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // --- 3. Create Simulation Objects ---
+
+        const pTypeMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true, transparent: true, opacity: 0.35 });
+        const nTypeMaterial = new THREE.MeshBasicMaterial({ color: 0x3b82f6, wireframe: true, transparent: true, opacity: 0.35 });
+        
+        const blockGeo = new THREE.BoxGeometry(15, 10, 10);
+        
+        const pBlock = new THREE.Mesh(blockGeo, pTypeMaterial);
+        pBlock.position.set(-8, 0, 0);
+        scene.add(pBlock);
+        
+        const nBlock = new THREE.Mesh(blockGeo, nTypeMaterial);
+        nBlock.position.set(8, 0, 0);
+        scene.add(nBlock);
+
+        const junctionGeo = new THREE.BoxGeometry(1, 10, 10);
+        const junctionMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending });
+        const junction = new THREE.Mesh(junctionGeo, junctionMat);
+        scene.add(junction);
+
+        const sceneGlowGeo = new THREE.SphereGeometry(6, 32, 32);
+        const sceneGlowMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const sceneGlow = new THREE.Mesh(sceneGlowGeo, sceneGlowMat);
+        scene.add(sceneGlow);
+
+        function createTextSprite(text, color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.font = 'bold 36px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 64);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(12, 3, 1);
+            return sprite;
+        }
+
+        const labelA = createTextSprite("Anode (A) / P-Type", "#fca5a5");
+        labelA.position.set(-8, 6, 0);
+        scene.add(labelA);
+
+        const labelK = createTextSprite("Cathode (K) / N-Type", "#93c5fd");
+        labelK.position.set(8, 6, 0);
+        scene.add(labelK);
+
+        const electronCount = 100;
+        const holeCount = 100;
+        
+        const electrons = [];
+        const holes = [];
+        const photons = [];
+
+        const particleGeo = new THREE.SphereGeometry(0.3, 16, 16);
+        const holeGeo = new THREE.TorusGeometry(0.3, 0.1, 8, 16);
+
+        const electronMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 1 });
+        const holeMat = new THREE.MeshBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.6 });
+
+        for(let i=0; i<electronCount; i++) {
+            const mesh = new THREE.Mesh(particleGeo, electronMat.clone());
+            mesh.position.set(
+                Math.random() * 14 + 1, 
+                (Math.random() - 0.5) * 8, 
+                (Math.random() - 0.5) * 8
+            );
+            scene.add(mesh);
+            electrons.push({
+                mesh: mesh,
+                basePos: mesh.position.clone(),
+                velocity: new THREE.Vector3(),
+                state: 'idle',
+                targetHole: null
+            });
+        }
+
+        for(let i=0; i<holeCount; i++) {
+            const mesh = new THREE.Mesh(holeGeo, holeMat.clone());
+            mesh.position.set(
+                -(Math.random() * 14 + 1), 
+                (Math.random() - 0.5) * 8, 
+                (Math.random() - 0.5) * 8
+            );
+            mesh.lookAt(0, mesh.position.y, mesh.position.z);
+            scene.add(mesh);
+            holes.push({
+                mesh: mesh,
+                basePos: mesh.position.clone(),
+                isFilled: false,
+                state: 'idle'
+            });
+        }
+
+        // --- 4. Logic & Simulation Update ---
+
+        function getBandgapColor() {
+            // Map 0-100 to Hue (Red to Blue)
+            const hue = (bandgap / 100) * 0.66; 
+            return new THREE.Color().setHSL(hue, 1.0, 0.5);
+        }
+
+        function updateExplanation() {
+            if (!isPowerOn) {
+                explanationText.innerHTML = "ระบบปิดอยู่<br>อิเล็กตรอน (สีฟ้า) และ โฮล (สีแดง) กระจายตัวอยู่ตามธรรมชาติในโครงสร้างสารกึ่งตัวนำ N-type และ P-type";
+                return;
+            }
+
+            if (!isConducting) {
+                // แจ้งเตือนเมื่อแรงดันไม่ถึง Cut-in Voltage
+                explanationText.innerHTML = `
+                    <span class="text-red-400 font-semibold"><i class="fa-solid fa-triangle-exclamation"></i> แรงดันไม่ถึงจุดคัตอิน (Cut-in Voltage)</span><br>
+                    แรงดันปัจจุบัน: ${actualVoltage.toFixed(1)} V / <span class="text-slate-300">ต้องการ: <b>${cutInVoltage.toFixed(1)} V ขึ้นไป</b></span><br>
+                    อิเล็กตรอนยังมีพลังงานไม่พอที่จะข้ามช่องว่างพลังงานได้ กรุณาเพิ่มแรงดันไฟฟ้า (Voltage)`;
+                return;
+            }
+
+            let bandgapText = "ปานกลาง (แสงสีเขียว/เหลือง)";
+            let materialUsed = "<div class='text-2xl md:text-3xl font-black text-emerald-400 bg-emerald-900/30 px-4 py-2 rounded-xl border border-emerald-700/50 inline-block mt-2 shadow-lg shadow-emerald-900/50'>🟢 GaP</div><div class='text-xs md:text-sm text-emerald-300 mt-1 font-mono'>Gallium Phosphide</div>";
+            
+            if(bandgap < 33) {
+                bandgapText = "แคบ พลังงานต่ำ (แสงสีแดง)";
+                materialUsed = "<div class='text-2xl md:text-3xl font-black text-red-400 bg-red-900/30 px-4 py-2 rounded-xl border border-red-700/50 inline-block mt-2 shadow-lg shadow-red-900/50'>🔴 GaAsP</div><div class='text-xs md:text-sm text-red-300 mt-1 font-mono'>Gallium Arsenide Phosphide</div>";
+            }
+            else if(bandgap > 66) {
+                bandgapText = "กว้าง พลังงานสูง (แสงสีน้ำเงิน)";
+                materialUsed = "<div class='text-2xl md:text-3xl font-black text-blue-400 bg-blue-900/30 px-4 py-2 rounded-xl border border-blue-700/50 inline-block mt-2 shadow-lg shadow-blue-900/50'>🔵 InGaN</div><div class='text-xs md:text-sm text-blue-300 mt-1 font-mono'>Indium Gallium Nitride</div>";
+            }
+
+            explanationText.innerHTML = `
+                <span class="text-blue-400 font-semibold">1. กระตุ้น (Voltage ${actualVoltage.toFixed(1)}V):</span> อิเล็กตรอนฝั่ง <b class="text-blue-300">N-type</b> และ โฮลฝั่ง <b class="text-red-300">P-type</b> ถูกผลักเข้าหากัน<br>
+                <span class="text-purple-400 font-semibold">2. รวมตัว (Recombine):</span> อนุภาคจับคู่และรวมตัวกันบริเวณรอยต่อ (Junction)<br>
+                <span class="text-emerald-400 font-semibold">3. สีที่ได้:</span> ช่องว่างพลังงาน${bandgapText}<br>
+                <div class="mt-3 p-3 bg-slate-900 rounded-xl text-center border border-slate-700 shadow-inner">
+                    <span class="text-slate-400 text-[10px] md:text-xs font-bold tracking-widest uppercase">สารกึ่งตัวนำที่ใช้ผลิต</span><br>
+                    ${materialUsed}
+                </div>
+            `;
+        }
+
+        function spawnPhoton(position) {
+            const photonGeo = new THREE.SphereGeometry(0.4, 8, 8);
+            const photonMat = new THREE.MeshBasicMaterial({ 
+                color: currentColor, 
+                transparent: true, 
+                opacity: 1 
+            });
+            const photon = new THREE.Mesh(photonGeo, photonMat);
+            photon.position.copy(position);
+            scene.add(photon);
+
+            const dir = new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 2
+            ).normalize();
+
+            // Speed based on how much voltage exceeds cut-in
+            const excessV = actualVoltage - cutInVoltage;
+            const speedMultiplier = 0.5 + (Math.max(0, excessV) * 0.2);
+
+            photons.push({
+                mesh: photon,
+                dir: dir,
+                life: 1.0,
+                speed: speedMultiplier
+            });
+        }
+
+        function updateSimulation(deltaTime) {
+            for (let i = photons.length - 1; i >= 0; i--) {
+                const p = photons[i];
+                p.mesh.position.addScaledVector(p.dir, p.speed);
+                p.life -= 0.02;
+                p.mesh.scale.setScalar(p.life);
+                p.mesh.material.opacity = p.life;
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    photons.splice(i, 1);
+                }
+            }
+
+            // หากไฟปิด หรือ แรงดันไม่ถึง Cut-in (ไม่นำกระแส)
+            if (!isConducting) {
+                electrons.forEach(e => {
+                    if(e.state === 'idle') {
+                        e.mesh.position.x = e.basePos.x + Math.sin(Date.now() * 0.005 + e.basePos.y) * 0.2;
+                        e.mesh.position.y = e.basePos.y + Math.cos(Date.now() * 0.004 + e.basePos.x) * 0.2;
+                    } else {
+                        e.state = 'idle';
+                        e.mesh.position.copy(e.basePos);
+                        e.mesh.material.opacity = 1;
+                        if(e.targetHole) {
+                            e.targetHole.isFilled = false;
+                            e.targetHole.mesh.material.opacity = 0.6;
+                            e.targetHole.mesh.position.copy(e.targetHole.basePos);
+                            e.targetHole = null;
+                        }
+                    }
+                });
+                holes.forEach(h => {
+                    if (!h.isFilled) {
+                        h.mesh.position.x = h.basePos.x + Math.sin(Date.now() * 0.005 + h.basePos.y) * 0.2;
+                        h.mesh.position.y = h.basePos.y + Math.cos(Date.now() * 0.004 + h.basePos.x) * 0.2;
+                    }
+                });
+                return;
+            }
+
+            // เมื่อนำกระแส (isConducting == true)
+            const excessV = actualVoltage - cutInVoltage;
+            const moveSpeed = 0.1 + (excessV * 0.05);
+            const spawnRate = 0.05 + (excessV * 0.02);
+
+            holes.forEach(h => {
+                if (!h.isFilled) {
+                    h.mesh.position.y = h.basePos.y + Math.cos(Date.now() * 0.005 + h.basePos.x) * 0.2;
+                    h.mesh.position.x = h.basePos.x + Math.sin(Date.now() * 0.004 + h.basePos.y) * 0.1;
+                }
+            });
+
+            electrons.forEach(e => {
+                if (e.state === 'idle') {
+                    e.mesh.position.y = e.basePos.y + Math.cos(Date.now() * 0.004 + e.basePos.x) * 0.2;
+
+                    if (Math.random() < spawnRate) {
+                        const emptyHoles = holes.filter(h => !h.isFilled);
+                        if (emptyHoles.length > 0) {
+                            const target = emptyHoles[Math.floor(Math.random() * emptyHoles.length)];
+                            target.isFilled = true;
+                            e.targetHole = target;
+                            e.state = 'moving';
+                        }
+                    }
+                } else if (e.state === 'moving' && e.targetHole) {
+                    const dir = new THREE.Vector3().subVectors(e.targetHole.mesh.position, e.mesh.position);
+                    const dist = dir.length();
+
+                    if (dist < 0.5) {
+                        e.state = 'recombining';
+                        const midPoint = e.mesh.position.clone().add(e.targetHole.mesh.position).multiplyScalar(0.5);
+                        e.mesh.position.copy(midPoint);
+                        e.targetHole.mesh.position.copy(midPoint);
+                        
+                        spawnPhoton(midPoint);
+                        
+                        e.targetHole.mesh.material.opacity = 0;
+                        e.mesh.material.opacity = 0;
+
+                        setTimeout(() => {
+                            if(e.targetHole) {
+                                e.targetHole.isFilled = false;
+                                e.targetHole.mesh.material.opacity = 0.6;
+                                e.targetHole.mesh.position.copy(e.targetHole.basePos);
+                            }
+                            e.state = 'idle';
+                            e.mesh.position.copy(e.basePos);
+                            e.mesh.material.opacity = 1;
+                        }, 500);
+                        
+                    } else {
+                        dir.normalize();
+                        e.mesh.position.addScaledVector(dir, moveSpeed);
+                        e.targetHole.mesh.position.addScaledVector(dir.clone().negate(), moveSpeed);
+                    }
+                }
+            });
+        }
+
+        // --- 5. Interaction Setup ---
+        let isDragging3D = false;
+        let previousMousePosition3D = { x: 0, y: 0 };
+        let initialPinchDistance = null;
+
+        function getDistance(touch1, touch2) {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        container.addEventListener('mousedown', (e) => {
+            isDragging3D = true;
+            previousMousePosition3D = { x: e.clientX, y: e.clientY };
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging3D) {
+                const deltaMove = {
+                    x: e.clientX - previousMousePosition3D.x,
+                    y: e.clientY - previousMousePosition3D.y
+                };
+
+                const deltaRotationQuaternion = new THREE.Quaternion()
+                    .setFromEuler(new THREE.Euler(
+                        deltaMove.y * (Math.PI / 180) * 0.5,
+                        deltaMove.x * (Math.PI / 180) * 0.5,
+                        0,
+                        'XYZ'
+                    ));
+
+                scene.quaternion.multiplyQuaternions(deltaRotationQuaternion, scene.quaternion);
+                previousMousePosition3D = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging3D = false;
+        });
+
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging3D = true;
+                initialPinchDistance = null;
+                previousMousePosition3D = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.touches.length === 2) {
+                isDragging3D = false;
+                initialPinchDistance = getDistance(e.touches[0], e.touches[1]);
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isDragging3D) {
+                const deltaMove = {
+                    x: e.touches[0].clientX - previousMousePosition3D.x,
+                    y: e.touches[0].clientY - previousMousePosition3D.y
+                };
+
+                const deltaRotationQuaternion = new THREE.Quaternion()
+                    .setFromEuler(new THREE.Euler(
+                        deltaMove.y * (Math.PI / 180) * 0.5,
+                        deltaMove.x * (Math.PI / 180) * 0.5,
+                        0,
+                        'XYZ'
+                    ));
+
+                scene.quaternion.multiplyQuaternions(deltaRotationQuaternion, scene.quaternion);
+                previousMousePosition3D = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                
+            } else if (e.touches.length === 2 && initialPinchDistance !== null) {
+                const currentDistance = getDistance(e.touches[0], e.touches[1]);
+                const distanceDelta = initialPinchDistance - currentDistance;
+
+                camera.position.z += distanceDelta * 0.05;
+                camera.position.z = Math.max(10, Math.min(camera.position.z, 50));
+
+                initialPinchDistance = currentDistance;
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                initialPinchDistance = null;
+            }
+            if (e.touches.length === 0) {
+                isDragging3D = false;
+            }
+        });
+
+        container.addEventListener('wheel', (e) => {
+            camera.position.z += e.deltaY * 0.05;
+            camera.position.z = Math.max(10, Math.min(camera.position.z, 50));
+        });
+
+        // --- 6. UI Listeners & Control ---
+        resetCamBtn.addEventListener('click', () => {
+            scene.quaternion.identity();
+            camera.position.set(0, 5, 25);
+            camera.lookAt(0, 0, 0);
+        });
+
+        powerBtn.addEventListener('click', () => {
+            isPowerOn = !isPowerOn;
+            
+            if (isPowerOn) {
+                powerBtn.classList.remove('bg-slate-600');
+                powerBtn.classList.add('bg-emerald-500');
+                powerKnob.classList.remove('translate-x-1');
+                powerKnob.classList.add('translate-x-6', 'md:translate-x-7');
+                
+                powerStatusText.textContent = "ระบบทำงาน (Power ON)";
+                powerStatusText.classList.remove('text-red-400');
+                powerStatusText.classList.add('text-emerald-400');
+                controlsContainer.classList.remove('opacity-50', 'pointer-events-none');
+                
+                // Set default voltage to show cut-in behavior (approx 2.5V)
+                if(voltageSliderValue === 0) {
+                    voltageSlider.value = 50; 
+                    voltageSliderValue = 50;
+                }
+            } else {
+                powerBtn.classList.remove('bg-emerald-500');
+                powerBtn.classList.add('bg-slate-600');
+                powerKnob.classList.remove('translate-x-6', 'md:translate-x-7');
+                powerKnob.classList.add('translate-x-1');
+                
+                powerStatusText.textContent = "ปิดระบบ (Power OFF)";
+                powerStatusText.classList.remove('text-emerald-400');
+                powerStatusText.classList.add('text-red-400');
+                controlsContainer.classList.add('opacity-50', 'pointer-events-none');
+                
+                if (ledStatusText) {
+                    ledStatusText.textContent = "ปิดระบบ";
+                    ledStatusText.classList.remove('text-emerald-400', 'text-red-400');
+                    ledStatusText.classList.add('text-slate-400');
+                }
+            }
+            updateUIValues();
+        });
+
+        voltageSlider.addEventListener('input', (e) => {
+            voltageSliderValue = parseFloat(e.target.value);
+            updateUIValues();
+        });
+
+        bandgapSlider.addEventListener('input', (e) => {
+            bandgap = parseFloat(e.target.value);
+            updateUIValues();
+        });
+
+        autoBandgapBtn.addEventListener('click', () => {
+            isAutoBandgap = !isAutoBandgap;
+            
+            if (isAutoBandgap) {
+                autoBandgapBtn.classList.replace('bg-slate-600', 'bg-blue-500');
+                autoBandgapKnob.classList.replace('translate-x-1', 'translate-x-4');
+                autoSpeedContainer.classList.remove('hidden');
+                bandgapSlider.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                autoBandgapBtn.classList.replace('bg-blue-500', 'bg-slate-600');
+                autoBandgapKnob.classList.replace('translate-x-4', 'translate-x-1');
+                autoSpeedContainer.classList.add('hidden');
+                bandgapSlider.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        });
+
+        autoSpeedSlider.addEventListener('input', (e) => {
+            autoBandgapSpeed = parseFloat(e.target.value);
+        });
+
+        function updateUIValues() {
+            // คำนวณ Voltage จริง (0 ถึง 5.0V)
+            actualVoltage = voltageSliderValue * 0.05;
+            
+            // คำนวณ Cut-in Voltage ตาม Bandgap
+            // แดง (0) = ~1.8V, น้ำเงิน (100) = ~3.0V
+            cutInVoltage = 1.8 + (bandgap / 100) * 1.2;
+            
+            // เช็คว่านำกระแสหรือไม่
+            isConducting = isPowerOn && (actualVoltage >= cutInVoltage);
+
+            // อัปเดต UI แรงดันไฟฟ้า
+            voltageVal.textContent = actualVoltage.toFixed(1) + " V";
+            if (isPowerOn && !isConducting) {
+                voltageVal.classList.remove('text-blue-300');
+                voltageVal.classList.add('text-red-400'); // แดงเตือนว่าไฟไม่พอ
+            } else {
+                voltageVal.classList.add('text-blue-300');
+                voltageVal.classList.remove('text-red-400');
+            }
+            
+            currentColor = getBandgapColor();
+            
+            let bgText = "ปานกลาง";
+            if(bandgap < 33) bgText = "แคบ";
+            else if(bandgap > 66) bgText = "กว้าง";
+            bandgapVal.textContent = bgText;
+            
+            bandgapVal.style.color = `rgb(${currentColor.r*255}, ${currentColor.g*255}, ${currentColor.b*255})`;
+            
+            if (spectrumIndicator) {
+                spectrumIndicator.style.left = `${bandgap}%`;
+                spectrumIndicator.style.boxShadow = `0 0 10px rgb(${currentColor.r*255}, ${currentColor.g*255}, ${currentColor.b*255})`;
+            }
+            
+            // อัปเดต UI หลอดไฟ
+            if (isPowerOn) {
+                if (isConducting) {
+                    ledStatusText.textContent = "สว่าง (ON)";
+                    ledStatusText.classList.remove('text-slate-400', 'text-red-400');
+                    ledStatusText.classList.add('text-emerald-400');
+                } else {
+                    ledStatusText.textContent = "ไฟไม่พอ (OFF)";
+                    ledStatusText.classList.remove('text-slate-400', 'text-emerald-400');
+                    ledStatusText.classList.add('text-red-400');
+                }
+            }
+            
+            updateExplanation();
+            updateLEDVisuals();
+            update3DGap();
+        }
+
+        function update3DGap() {
+            if (typeof pBlock === 'undefined' || typeof nBlock === 'undefined' || typeof junction === 'undefined') return;
+
+            const gapSize = 0.5 + (bandgap / 100) * 5.5; 
+            
+            const targetPx = -(7.5 + gapSize / 2);
+            const targetNx = (7.5 + gapSize / 2);
+
+            const deltaP = targetPx - pBlock.position.x;
+            const deltaN = targetNx - nBlock.position.x;
+
+            pBlock.position.x = targetPx;
+            nBlock.position.x = targetNx;
+            
+            if (typeof labelA !== 'undefined') labelA.position.x = targetPx;
+            if (typeof labelK !== 'undefined') labelK.position.x = targetNx;
+
+            junction.scale.x = gapSize;
+
+            if (typeof electrons !== 'undefined') {
+                electrons.forEach(e => {
+                    e.basePos.x += deltaN;
+                    e.mesh.position.x += deltaN;
+                });
+            }
+            if (typeof holes !== 'undefined') {
+                holes.forEach(h => {
+                    h.basePos.x += deltaP;
+                    h.mesh.position.x += deltaP;
+                });
+            }
+        }
+
+        function updateLEDVisuals() {
+            if (!isConducting) {
+                ledGlow.style.opacity = 0;
+                document.getElementById('led-base-icon').style.color = '#475569';
+                
+                if (typeof junction !== 'undefined') {
+                    junction.material.color.setHex(0xffffff);
+                    junction.material.opacity = 0.05;
+                }
+                if (typeof sceneGlow !== 'undefined') {
+                    sceneGlow.material.opacity = 0;
+                }
+                scene.background.copy(baseBgColor);
+                scene.fog.color.copy(baseBgColor);
+                
+                return;
+            }
+
+            // คำนวณความสว่างตามส่วนเกินของแรงดันไฟฟ้า (ส่วนที่เกิน Cut-in)
+            const excessV = actualVoltage - cutInVoltage;
+            // สว่างเต็มที่เมื่อแรงดันเกินมาประมาณ 1.5V
+            const intensity = Math.min(1.0, 0.2 + (excessV / 1.5));
+            
+            const r = Math.floor(currentColor.r * 255);
+            const g = Math.floor(currentColor.g * 255);
+            const b = Math.floor(currentColor.b * 255);
+            
+            ledGlow.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+            ledGlow.style.boxShadow = `0 0 ${20 + intensity*30}px ${10 + intensity*20}px rgba(${r}, ${g}, ${b}, ${0.5 + intensity*0.5})`;
+            ledGlow.style.opacity = 0.4 + (intensity * 0.6);
+            
+            document.getElementById('led-base-icon').style.color = `rgb(${Math.min(255, r+100)}, ${Math.min(255, g+100)}, ${Math.min(255, b+100)})`;
+
+            if (typeof junction !== 'undefined') {
+                junction.material.color.copy(currentColor);
+                junction.material.opacity = 0.2 + (intensity * 0.5); 
+            }
+            
+            if (typeof sceneGlow !== 'undefined') {
+                sceneGlow.material.color.copy(currentColor);
+                sceneGlow.material.opacity = 0.1 + (intensity * 0.4); 
+                const scale = 0.8 + (intensity * 0.7);
+                sceneGlow.scale.set(scale, scale, scale);
+            }
+
+            const mixColor = baseBgColor.clone().lerp(currentColor, intensity * 0.15);
+            scene.background.copy(mixColor);
+            scene.fog.color.copy(mixColor);
+        }
+
+        // --- 7. Main Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            
+            if (isAutoBandgap && isPowerOn) {
+                bandgap += autoBandgapSpeed * bandgapDirection * delta;
+                
+                if (bandgap >= 100) {
+                    bandgap = 100;
+                    bandgapDirection = -1;
+                } else if (bandgap <= 0) {
+                    bandgap = 0;
+                    bandgapDirection = 1;
+                }
+                
+                bandgapSlider.value = bandgap;
+                updateUIValues();
+            }
+
+            updateSimulation(delta);
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        updateUIValues();
+        window.onload = function() {
+            animate();
+        };
+
+    </script>
+</body>
+</html>
+
+```
         }
         .pointer-events-auto {
             pointer-events: auto;
